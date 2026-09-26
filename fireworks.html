@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>夏夜烟花 · 唯美文案</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0b0e1a;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at 20% 20%, #10162a, #03050b);
+      cursor: crosshair;
+    }
+    /* 唯美文案样式 —— 浮现在画面上，随后淡出 */
+    .poem {
+      position: fixed;
+      pointer-events: none;
+      color: #fff4e6;
+      font-size: 1.4rem;
+      font-weight: 300;
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(255, 200, 120, 0.8), 0 0 40px rgba(255, 100, 50, 0.5);
+      white-space: nowrap;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.9);
+      animation: poemFloat 2.8s ease-out forwards;
+      z-index: 100;
+      padding: 8px 18px;
+      border-radius: 40px;
+      background: rgba(10, 10, 20, 0.15);
+      backdrop-filter: blur(3px);
+      border: 1px solid rgba(255, 215, 150, 0.2);
+      box-shadow: 0 0 30px rgba(255, 180, 80, 0.15);
+      font-style: italic;
+      text-align: center;
+      line-height: 1.4;
+      max-width: 80vw;
+      white-space: normal;
+      word-break: keep-all;
+    }
+    @keyframes poemFloat {
+      0% {
+        opacity: 0;
+        transform: translate(-50%, -20%) scale(0.7);
+        filter: blur(8px);
+      }
+      15% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+        filter: blur(0);
+      }
+      70% {
+        opacity: 1;
+        transform: translate(-50%, -70%) scale(1.05);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -120%) scale(1.1);
+        filter: blur(4px);
+      }
+    }
+    /* 小屏适配 */
+    @media (max-width: 600px) {
+      .poem {
+        font-size: 1rem;
+        padding: 6px 14px;
+        letter-spacing: 1px;
+      }
+    }
+    .hint {
+      position: fixed;
+      bottom: 16px;
+      right: 18px;
+      color: rgba(220, 220, 255, 0.3);
+      font-size: 13px;
+      letter-spacing: 1px;
+      pointer-events: none;
+      user-select: none;
+      z-index: 10;
+      font-weight: 300;
+      backdrop-filter: blur(2px);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="fireworksCanvas"></canvas>
+  <div class="hint">夏夜 · 烟花 · 点击有惊喜</div>
+
+  <script>
+    (function() {
+      const canvas = document.getElementById('fireworksCanvas');
+      const ctx = canvas.getContext('2d');
+      
+      let width, height;
+      // 粒子系统
+      let particles = [];
+      // 升空的烟花（拖尾光点）
+      let rockets = [];
+
+      // 基础参数
+      const GRAVITY = 0.06;
+      const ROCKET_SPEED = 4.8;
+      const PARTICLE_DECAY = 0.985;
+      const ROCKET_DECAY = 0.99;
+
+      // 色调
+      const HUES = [45, 30, 15, 330, 280, 200, 170, 60, 350, 310, 20, 50, 190];
+
+      // ------------------------------
+      // 唯美文案库
+      // ------------------------------
+      const POEMS = [
+        "夏夜很长，烟花很短，但想你很久",
+        "刹那的光，照亮了整片星空",
+        "烟花坠地之前，所有愿望都还来得及",
+        "今夜月色温柔，烟火也浪漫",
+        "满天星辰，不及你眼底的光",
+        "把心事点燃，让夜空替我说",
+        "一朵烟花，替夏天说了晚安",
+        "光落在你脸上，可爱一如往常",
+        "烟火向星辰，所愿皆成真",
+        "夏天的风，我永远记得",
+        "烟花虽短，却照亮了记忆的河",
+        "在盛夏的夜晚，和烟花一起绽放",
+        "想和你一起，看尽世间烟火",
+        "每一朵烟花，都是一句未曾说出口的话",
+        "夜风温柔，烟火绚烂，而你恰好也在",
+        "烟花是夜的微笑，你是我的浪漫",
+        "光散落的地方，都是夏天的诗",
+        "把所有的浪漫，都藏进这一场烟火里",
+        "天空一声巨响，夏天闪亮登场",
+        "愿所有遗憾，都随烟花飘散",
+        "在有限的光里，拥抱无限的你",
+        "烟花落下，夏天才刚刚开始",
+        "这一瞬间的灿烂，足够我回味一整年",
+        "夏夜，烟火，晚风，还有你",
+        "所有美好，都在这一秒炸开了",
+      ];
+
+      // 上次文案索引，避免连续重复
+      let lastPoemIndex = -1;
+
+      // ------------------------------
+      // 显示唯美文案（同时随机位置）
+      // ------------------------------
+      function showPoem(x, y) {
+        // 随机选一句，且尽量不与上一次相同
+        let idx;
+        if (POEMS.length > 1) {
+          do {
+            idx = Math.floor(Math.random() * POEMS.length);
+          } while (idx === lastPoemIndex);
+        } else {
+          idx = 0;
+        }
+        lastPoemIndex = idx;
+        const text = POEMS[idx];
+
+        // 创建 DOM 元素
+        const poemEl = document.createElement('div');
+        poemEl.className = 'poem';
+        poemEl.textContent = text;
+
+        // 位置：基于点击位置，但稍微偏移，避免遮挡烟花中心；同时确保在视口内
+        // 如果点击位置太靠边，做一下限制
+        const offsetX = (Math.random() - 0.5) * 100; // ±50px 左右偏移
+        const offsetY = -30 + (Math.random() - 0.5) * 60; // 上下偏移
+
+        let left = x + offsetX;
+        let top = y + offsetY - 20; // 稍微往上一点，避免盖住爆炸中心
+
+        // 边界限制（考虑元素宽度未知，先粗略限制百分比）
+        // 让文案尽量不出界，但可以使用 transform 居中，所以 left/top 对应中心点
+        // 限制在 10% ~ 90% 宽度， 10% ~ 80% 高度
+        const minLeft = width * 0.1;
+        const maxLeft = width * 0.9;
+        const minTop = height * 0.1;
+        const maxTop = height * 0.85;
+
+        left = Math.min(maxLeft, Math.max(minLeft, left));
+        top = Math.min(maxTop, Math.max(minTop, top));
+
+        poemEl.style.left = left + 'px';
+        poemEl.style.top = top + 'px';
+
+        document.body.appendChild(poemEl);
+
+        // 动画结束后自动移除元素
+        setTimeout(() => {
+          if (poemEl.parentNode) {
+            poemEl.remove();
+          }
+        }, 2800);
+      }
+
+      // ------------------------------
+      // 初始化 & 尺寸自适应
+      // ------------------------------
+      function resizeCanvas() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      const rand = (min, max) => Math.random() * (max - min) + min;
+      
+      // ------------------------------
+      // 创建火箭
+      // ------------------------------
+      function createRocket(targetX, targetY) {
+        const startX = width * 0.5 + rand(-80, 80);
+        const startY = height * 0.95 + rand(-10, 10);
+        
+        let finalX = targetX;
+        let finalY = targetY;
+        if (finalY > height * 0.55) {
+          finalY = height * 0.3 + rand(-60, 60);
+        }
+        finalX = Math.min(width - 40, Math.max(40, finalX));
+        finalY = Math.min(height * 0.7, Math.max(60, finalY));
+
+        const dx = finalX - startX;
+        const dy = finalY - startY;
+        const distance = Math.hypot(dx, dy);
+        const speed = Math.min(11, 6 + distance * 0.008);
+        
+        const vx = (dx / distance) * speed;
+        const vy = (dy / distance) * speed;
+
+        const life = Math.floor(distance / speed * 0.9 + rand(4, 10));
+        const hue = HUES[Math.floor(Math.random() * HUES.length)];
+        const sizeFactor = rand(0.8, 1.5);
+
+        return {
+          x: startX,
+          y: startY,
+          vx: vx,
+          vy: vy,
+          life: life,
+          maxLife: life,
+          hue: hue,
+          sizeFactor: sizeFactor,
+          trail: [],
+          trailLength: 5,
+        };
+      }
+
+      // ------------------------------
+      // 爆炸粒子
+      // ------------------------------
+      function explode(rocket) {
+        const { x, y, hue, sizeFactor } = rocket;
+        const count = Math.floor(rand(70, 150) * sizeFactor);
+        const baseHue = hue;
+        const hueSpread = rand(20, 50);
+        const baseSpeed = rand(2.2, 4.5) * sizeFactor;
+        
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = baseSpeed * rand(0.5, 1.8);
+          const vx = Math.cos(angle) * speed;
+          const vy = Math.sin(angle) * speed;
+          
+          let particleHue = baseHue + rand(-hueSpread, hueSpread);
+          particleHue = (particleHue + 360) % 360;
+          
+          const sat = rand(50, 100);
+          const light = rand(55, 95);
+          const alpha = 1;
+          const life = Math.floor(rand(50, 110) * (0.8 + sizeFactor * 0.2));
+          
+          particles.push({
+            x: x + rand(-2, 2),
+            y: y + rand(-2, 2),
+            vx: vx,
+            vy: vy,
+            hue: particleHue,
+            sat: sat,
+            light: light,
+            alpha: alpha,
+            life: life,
+            maxLife: life,
+            decay: rand(0.975, 0.995),
+            twinkle: Math.random() < 0.4,
+          });
+        }
+        
+        // 白色小闪光
+        const sparkCount = Math.floor(rand(10, 25));
+        for (let i = 0; i < sparkCount; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = rand(1.0, 3.5) * sizeFactor;
+          const vx = Math.cos(angle) * speed;
+          const vy = Math.sin(angle) * speed;
+          particles.push({
+            x: x,
+            y: y,
+            vx: vx,
+            vy: vy,
+            hue: 0,
+            sat: 0,
+            light: 100,
+            alpha: 1,
+            life: Math.floor(rand(30, 70)),
+            maxLife: 70,
+            decay: 0.96,
+            twinkle: true,
+          });
+        }
+      }
+
+      // ------------------------------
+      // 更新
+      // ------------------------------
+      function update() {
+        for (let i = rockets.length - 1; i >= 0; i--) {
+          const r = rockets[i];
+          r.trail.push({ x: r.x, y: r.y });
+          if (r.trail.length > r.trailLength) {
+            r.trail.shift();
+          }
+          
+          r.x += r.vx;
+          r.y += r.vy;
+          r.vx *= ROCKET_DECAY;
+          r.vy *= ROCKET_DECAY;
+          r.vy += GRAVITY * 0.3;
+          r.life -= 1;
+          
+          const outOfBounds = (r.x < -100 || r.x > width + 100 || r.y < -100 || r.y > height + 100);
+          if (r.life <= 0 || outOfBounds) {
+            if (r.x > 20 && r.x < width - 20 && r.y > 20 && r.y < height * 0.9) {
+              explode(r);
+            }
+            rockets.splice(i, 1);
+          }
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= p.decay;
+          p.vy *= p.decay;
+          p.vy += GRAVITY;
+          p.life -= 1;
+          
+          if (p.life < p.maxLife * 0.2) {
+            p.alpha = Math.max(0, p.life / (p.maxLife * 0.2));
+          } else {
+            p.alpha = 1;
+          }
+          
+          if (p.life <= 0 || p.alpha <= 0.01) {
+            particles.splice(i, 1);
+          }
+        }
+      }
+
+      // ------------------------------
+      // 绘制
+      // ------------------------------
+      function draw() {
+        ctx.fillStyle = 'rgba(5, 8, 18, 0.25)';
+        ctx.fillRect(0, 0, width, height);
+        
+        // 星星背景
+        ctx.save();
+        for (let i = 0; i < 70; i++) {
+          const starX = (i * 127) % width;
+          const starY = (i * 311) % height;
+          const brightness = 0.4 + 0.6 * Math.sin(Date.now() * 0.001 + i * 2);
+          ctx.fillStyle = `rgba(255, 240, 200, ${brightness * 0.7})`;
+          ctx.beginPath();
+          ctx.arc(starX, starY, 1.0 + (i % 3) * 0.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // 火箭
+        for (const r of rockets) {
+          for (let i = 0; i < r.trail.length; i++) {
+            const t = r.trail[i];
+            const alpha = (i + 1) / r.trail.length * 0.5;
+            const size = 2.5 * (i / r.trail.length) + 0.8;
+            ctx.beginPath();
+            ctx.fillStyle = `hsla(${r.hue}, 90%, 70%, ${alpha})`;
+            ctx.arc(t.x, t.y, size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          ctx.shadowColor = `hsl(${r.hue}, 100%, 70%)`;
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.fillStyle = `hsl(${r.hue}, 100%, 85%)`;
+          ctx.arc(r.x, r.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.beginPath();
+          ctx.fillStyle = `hsl(${r.hue}, 100%, 70%)`;
+          ctx.arc(r.x, r.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+
+        // 粒子
+        for (const p of particles) {
+          let alpha = p.alpha;
+          if (p.twinkle && p.life % 8 < 2) {
+            alpha *= 0.7;
+          }
+          
+          ctx.fillStyle = `hsla(${p.hue}, ${p.sat}%, ${p.light}%, ${alpha})`;
+          
+          if (p.light > 80 && alpha > 0.6) {
+            ctx.shadowColor = `hsl(${p.hue}, ${p.sat}%, 70%)`;
+            ctx.shadowBlur = 8;
+          } else {
+            ctx.shadowBlur = 0;
+          }
+          
+          const radius = 1.8 + (p.life / p.maxLife) * 1.8;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      }
+
+      // ------------------------------
+      // 动画循环
+      // ------------------------------
+      function animate() {
+        update();
+        draw();
+        requestAnimationFrame(animate);
+      }
+
+      // ------------------------------
+      // 自动发射烟花
+      // ------------------------------
+      function autoLaunch() {
+        const targetX = width * 0.5 + rand(-width * 0.35, width * 0.35);
+        const targetY = height * 0.2 + rand(-height * 0.1, height * 0.2);
+        if (Math.random() < 0.3) {
+          const lowX = width * 0.5 + rand(-width * 0.4, width * 0.4);
+          const lowY = height * 0.5 + rand(-30, 60);
+          rockets.push(createRocket(lowX, lowY));
+        } else {
+          rockets.push(createRocket(targetX, targetY));
+        }
+        setTimeout(autoLaunch, rand(800, 2200));
+      }
+
+      // ------------------------------
+      // 交互：点击画布 → 发射烟花 + 显示唯美文案
+      // ------------------------------
+      function handleInteraction(e) {
+        e.preventDefault();
+        
+        let clientX, clientY;
+        if (e.touches) {
+          // 触摸事件
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+        } else {
+          clientX = e.clientX;
+          clientY = e.clientY;
+        }
+        
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const canvasX = (clientX - rect.left) * scaleX;
+        const canvasY = (clientY - rect.top) * scaleY;
+        
+        // 1. 发射烟花
+        rockets.push(createRocket(canvasX, canvasY));
+        
+        // 2. 显示唯美文案（位置基于点击的屏幕坐标，而不是画布坐标，因为文案是 DOM 元素，用 px 定位）
+        //    但注意如果是 canvas 缩放，屏幕坐标就是 clientX/clientY
+        showPoem(clientX, clientY);
+        
+        // 额外：为了防止触摸滚动或缩放，已在触摸事件中 preventDefault
+      }
+
+      canvas.addEventListener('click', handleInteraction);
+      canvas.addEventListener('touchstart', handleInteraction, { passive: false });
+
+      // ------------------------------
+      // 启动
+      // ------------------------------
+      setTimeout(() => {
+        rockets.push(createRocket(width * 0.3, height * 0.3));
+        rockets.push(createRocket(width * 0.7, height * 0.25));
+      }, 100);
+      
+      setTimeout(() => {
+        rockets.push(createRocket(width * 0.5, height * 0.2));
+      }, 400);
+      
+      setTimeout(autoLaunch, 800);
+      
+      animate();
+
+    })();
+  </script>
+</body>
+</html>
